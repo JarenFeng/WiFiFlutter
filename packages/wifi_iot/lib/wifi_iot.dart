@@ -13,12 +13,14 @@ enum WIFI_AP_STATE {
   WIFI_AP_STATE_FAILED
 }
 
-enum NetworkSecurity { WPA, WEP, NONE }
+enum NetworkSecurity { WPA, WEP, NONE, WPA2, WPA3 }
 
 const serializeNetworkSecurityMap = <NetworkSecurity, String>{
   NetworkSecurity.WPA: "WPA",
   NetworkSecurity.WEP: "WEP",
   NetworkSecurity.NONE: "NONE",
+  NetworkSecurity.WPA2: "WPA2",
+  NetworkSecurity.WPA3: "WPA3",
 };
 
 const MethodChannel _channel = const MethodChannel('wifi_iot');

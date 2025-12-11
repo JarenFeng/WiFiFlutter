@@ -935,8 +935,10 @@ public class WifiIotPlugin
         suggestedNet.setBssid(macAddress);
       }
 
-      if (security != null && security.toUpperCase().equals("WPA")) {
+      if (security != null && (security.toUpperCase().equals("WPA") || security.toUpperCase().equals("WPA2"))) {
         suggestedNet.setWpa2Passphrase(password);
+      } else if (security != null && security.toUpperCase().equals("WPA3")) {
+        suggestedNet.setWpa3Passphrase(password);
       } else if (security != null && security.toUpperCase().equals("WEP")) {
         // WEP is not supported
         poResult.error(
@@ -1038,7 +1040,9 @@ public class WifiIotPlugin
   private static String getSecurityType(ScanResult scanResult) {
     String capabilities = scanResult.capabilities;
 
-    if (capabilities.contains("WPA")
+    if (capabilities.contains("SAE") || capabilities.contains("WPA3")) {
+      return "WPA3";
+    } else if (capabilities.contains("WPA")
         || capabilities.contains("WPA2")
         || capabilities.contains("WPA/WPA2 PSK")) {
       return "WPA";
@@ -1310,8 +1314,10 @@ public class WifiIotPlugin
         }
 
         // set password
-        if (security != null && security.toUpperCase().equals("WPA")) {
+        if (security != null && (security.toUpperCase().equals("WPA") || security.toUpperCase().equals("WPA2"))) {
           builder.setWpa2Passphrase(password);
+        } else if (security != null && security.toUpperCase().equals("WPA3")) {
+          builder.setWpa3Passphrase(password);
         }
 
         // remove suggestions if already existing
@@ -1360,8 +1366,10 @@ public class WifiIotPlugin
         }
 
         // set security
-        if (security != null && security.toUpperCase().equals("WPA")) {
+        if (security != null && (security.toUpperCase().equals("WPA") || security.toUpperCase().equals("WPA2"))) {
           builder.setWpa2Passphrase(password);
+        } else if (security != null && security.toUpperCase().equals("WPA3")) {
+          builder.setWpa3Passphrase(password);
         }
 
         final NetworkRequest networkRequest =
@@ -1464,7 +1472,7 @@ public class WifiIotPlugin
     if (security != null) security = security.toUpperCase();
     else security = "NONE";
 
-    if (security.toUpperCase().equals("WPA")) {
+    if (security.equals("WPA") || security.equals("WPA2")) {
 
       /// appropriate ciper is need to set according to security type used,
       /// ifcase of not added it will not be able to connect
@@ -1486,6 +1494,13 @@ public class WifiIotPlugin
 
       conf.allowedProtocols.set(android.net.wifi.WifiConfiguration.Protocol.RSN);
       conf.allowedProtocols.set(android.net.wifi.WifiConfiguration.Protocol.WPA);
+    } else if (security.equals("WPA3")) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        conf.preSharedKey = "\"" + password + "\"";
+        conf.allowedKeyManagement.set(android.net.wifi.WifiConfiguration.KeyMgmt.SAE);
+        conf.allowedProtocols.set(android.net.wifi.WifiConfiguration.Protocol.RSN);
+        conf.status = android.net.wifi.WifiConfiguration.Status.ENABLED;
+      }
     } else if (security.equals("WEP")) {
       conf.wepKeys[0] = "\"" + password + "\"";
       conf.wepTxKeyIndex = 0;
