@@ -1256,6 +1256,37 @@ public class WifiIotPlugin
     return sb.toString();
   }
 
+  private static String networkSuggestionStatusToCode(int status) {
+    if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
+      return WifiConnectCodes.OK;
+    }
+    if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_INTERNAL) {
+      return WifiConnectCodes.NETWORK_SUGGESTION_INTERNAL;
+    }
+    if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_APP_DISALLOWED) {
+      return WifiConnectCodes.NETWORK_SUGGESTION_APP_DISALLOWED;
+    }
+    if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_DUPLICATE) {
+      return WifiConnectCodes.NETWORK_SUGGESTION_DUPLICATE;
+    }
+    if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_EXCEEDS_MAX_PER_APP) {
+      return WifiConnectCodes.NETWORK_SUGGESTION_EXCEEDS_MAX_PER_APP;
+    }
+    if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_REMOVE_INVALID) {
+      return WifiConnectCodes.NETWORK_SUGGESTION_REMOVE_INVALID;
+    }
+    if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_NOT_ALLOWED) {
+      return WifiConnectCodes.NETWORK_SUGGESTION_ADD_NOT_ALLOWED;
+    }
+    if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_INVALID) {
+      return WifiConnectCodes.NETWORK_SUGGESTION_INVALID;
+    }
+    if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_RESTRICTED_BY_ADMIN) {
+      return WifiConnectCodes.NETWORK_SUGGESTION_RESTRICTED_BY_ADMIN;
+    }
+    return WifiConnectCodes.NETWORK_SUGGESTION_FAILED;
+  }
+
   /// Method to connect to WIFI Network
   private void connectTo(
       final Result poResult,
@@ -1269,13 +1300,13 @@ public class WifiIotPlugin
       final Integer timeoutInSeconds) {
     final Handler handler = new Handler(Looper.getMainLooper());
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-      final boolean connected =
+      final String connectResult =
           connectToDeprecated(ssid, bssid, password, security, joinOnce, isHidden);
       handler.post(
           new Runnable() {
             @Override
             public void run() {
-              poResult.success(connected);
+              poResult.success(connectResult);
             }
           });
     } else {
@@ -1285,8 +1316,7 @@ public class WifiIotPlugin
             new Runnable() {
               @Override
               public void run() {
-                poResult.error(
-                    "Error", "WEP is not supported for Android SDK " + Build.VERSION.SDK_INT, "");
+                poResult.success(WifiConnectCodes.WEP_NOT_SUPPORTED);
               }
             });
         return;
@@ -1305,7 +1335,7 @@ public class WifiIotPlugin
                 new Runnable() {
                   @Override
                   public void run() {
-                    poResult.error("Error", "Invalid BSSID representation", "");
+                    poResult.success(WifiConnectCodes.INVALID_BSSID);
                   }
                 });
             return;
@@ -1337,11 +1367,12 @@ public class WifiIotPlugin
         final int status = moWiFi.addNetworkSuggestions(networkSuggestions);
         Log.e(WifiIotPlugin.class.getSimpleName(), "status: " + status);
 
+        final String suggestionCode = networkSuggestionStatusToCode(status);
         handler.post(
             new Runnable() {
               @Override
               public void run() {
-                poResult.success(status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS);
+                poResult.success(suggestionCode);
               }
             });
       } else {
@@ -1357,7 +1388,7 @@ public class WifiIotPlugin
                 new Runnable() {
                   @Override
                   public void run() {
-                    poResult.error("Error", "Invalid BSSID representation", "");
+                    poResult.success(WifiConnectCodes.INVALID_BSSID);
                   }
                 });
             return;
@@ -1393,7 +1424,7 @@ public class WifiIotPlugin
                 super.onAvailable(network);
                 if (!resultSent) {
                   joinedNetwork = network;
-                  poResult.success(true);
+                  poResult.success(WifiConnectCodes.OK);
                   resultSent = true;
                 }
               }
@@ -1405,7 +1436,7 @@ public class WifiIotPlugin
                   connectivityManager.unregisterNetworkCallback(this);
                 }
                 if (!resultSent) {
-                  poResult.success(false);
+                  poResult.success(WifiConnectCodes.CONNECTION_UNAVAILABLE);
                   resultSent = true;
                 }
               }
@@ -1514,7 +1545,7 @@ public class WifiIotPlugin
   }
 
   @SuppressWarnings("deprecation")
-  private Boolean connectToDeprecated(
+  private String connectToDeprecated(
       String ssid,
       String bssid,
       String password,
@@ -1528,7 +1559,7 @@ public class WifiIotPlugin
     int updateNetwork = registerWifiNetworkDeprecated(conf);
 
     if (updateNetwork == -1) {
-      return false;
+      return WifiConnectCodes.NETWORK_CONFIGURATION_FAILED;
     }
 
     if (joinOnce != null && joinOnce.booleanValue()) {
@@ -1537,13 +1568,14 @@ public class WifiIotPlugin
 
     boolean disconnect = moWiFi.disconnect();
     if (!disconnect) {
-      return false;
+      return WifiConnectCodes.DISCONNECT_FAILED;
     }
 
     boolean enabled = moWiFi.enableNetwork(updateNetwork, true);
-    if (!enabled) return false;
+    if (!enabled) {
+      return WifiConnectCodes.ENABLE_NETWORK_FAILED;
+    }
 
-    boolean connected = false;
     for (int i = 0; i < 20; i++) {
       WifiInfo currentNet = moWiFi.getConnectionInfo();
       int networkId = currentNet.getNetworkId();
@@ -1552,16 +1584,18 @@ public class WifiIotPlugin
       // Wait for connection to reach state completed
       // to discard false positives like auth error
       if (networkId != -1 && netState == SupplicantState.COMPLETED) {
-        connected = networkId == updateNetwork;
-        break;
+        if (networkId == updateNetwork) {
+          return WifiConnectCodes.OK;
+        }
+        return WifiConnectCodes.CONNECTION_TIMEOUT;
       }
       try {
         Thread.sleep(500);
       } catch (InterruptedException ignored) {
-        break;
+        return WifiConnectCodes.CONNECTION_TIMEOUT;
       }
     }
 
-    return connected;
+    return WifiConnectCodes.CONNECTION_TIMEOUT;
   }
 }

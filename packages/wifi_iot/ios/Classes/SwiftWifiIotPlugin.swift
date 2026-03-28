@@ -131,33 +131,40 @@ public class SwiftWifiIotPlugin: NSObject, FlutterPlugin {
 
             NEHotspotConfigurationManager.shared.apply(configuration) { [weak self] (error) in
                 guard let this = self else {
-                    print("WiFi network not found")
-                    result(false)
+                    print("[wifi_iot] connect failed: plugin deallocated — \(WifiConnectCodes.pluginInternal)")
+                    result(WifiConnectCodes.pluginInternal)
+                    return
+                }
+                if let error = error {
+                    let ns = error as NSError
+                    if ns.domain == "NEHotspotConfigurationErrorDomain",
+                       let neError = NEHotspotConfigurationError(rawValue: ns.code) {
+                        let codeStr = WifiConnectCodes.from(neError: neError)
+                        print("[wifi_iot] connect failed: NEHotspotConfigurationError \(neError) (code=\(ns.code)) → \(codeStr) | \(ns.localizedDescription)")
+                        result(codeStr)
+                    } else {
+                        print("[wifi_iot] connect failed: unexpected NSError domain=\(ns.domain) code=\(ns.code) → \(WifiConnectCodes.unknownError) | \(ns.localizedDescription)")
+                        result(WifiConnectCodes.unknownError)
+                    }
                     return
                 }
                 this.getSSID { (connectedSSID) -> () in
-                    if (error != nil) {
-                        if (error?.localizedDescription == "already associated.") {
-                            print("Connected to '\(connectedSSID ?? "<Unknown Network>")'")
-                            result(true)
+                    if let connectedSSID = connectedSSID {
+                        if sSSID == connectedSSID {
+                            result(WifiConnectCodes.ok)
                         } else {
-                            print("Not Connected")
-                            result(false)
+                            print("[wifi_iot] connect failed: SSID mismatch expected='\(sSSID)' current='\(connectedSSID)' → \(WifiConnectCodes.postApplySsidMismatch)")
+                            result(WifiConnectCodes.postApplySsidMismatch)
                         }
-                    } else if let connectedSSID = connectedSSID {
-                        print("Connected to " + connectedSSID)
-                        // Emit result of [isConnected] by checking if targetSSID is the same as connectedSSID.
-                        result(sSSID == connectedSSID)
                     } else {
-                        print("WiFi network not found")
-                        result(false)
+                        print("[wifi_iot] connect failed: current SSID unavailable after apply → \(WifiConnectCodes.postApplySsidUnavailable)")
+                        result(WifiConnectCodes.postApplySsidUnavailable)
                     }
                 }
             }
         } else {
-            print("Not Connected")
-            result(nil)
-            return
+            print("[wifi_iot] connect failed: iOS < 11 — \(WifiConnectCodes.iosVersionUnsupported)")
+            result(WifiConnectCodes.iosVersionUnsupported)
         }
     }
 

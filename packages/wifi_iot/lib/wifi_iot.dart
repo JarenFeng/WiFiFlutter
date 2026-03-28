@@ -5,6 +5,10 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
+import 'wifi_connect_codes.dart';
+
+export 'wifi_connect_codes.dart';
+
 enum WIFI_AP_STATE {
   WIFI_AP_STATE_DISABLING,
   WIFI_AP_STATE_DISABLED,
@@ -321,9 +325,9 @@ class WiFiForIoTPlugin {
   ///
   /// @param [isHidden] Whether the SSID is hidden (not broadcasted by the AP).
   ///
-  /// @returns True in case the requested network could be connected to, false
-  ///   otherwise.
-  static Future<bool> connect(
+  /// Returns `WiFiConnectCode.ok` (empty string) if the connection succeeded.
+  /// Otherwise a stable error code string; see `WiFiConnectCode`.
+  static Future<String> connect(
     String ssid, {
     String? bssid,
     String? password,
@@ -342,13 +346,12 @@ class WiFiForIoTPlugin {
     // TODO: support any binary sequence as required instead of just strings.
     if (ssid.length == 0 || ssid.length > 32) {
       print("Invalid SSID");
-      return false;
+      return WiFiConnectCode.invalidSsid;
     }
 
     if (!Platform.isIOS && !await isEnabled()) await setEnabled(true);
-    bool? bResult;
     try {
-      bResult = await _channel.invokeMethod('connect', {
+      final Object? raw = await _channel.invokeMethod('connect', {
         "ssid": ssid.toString(),
         "bssid": bssid?.toString(),
         "password": password?.toString(),
@@ -358,10 +361,14 @@ class WiFiForIoTPlugin {
         "timeout_in_seconds": timeoutInSeconds,
         "security": serializeNetworkSecurityMap[security],
       });
+      if (raw is String) {
+        return raw;
+      }
+      return WiFiConnectCode.unknown;
     } on MissingPluginException catch (e) {
       print("MissingPluginException : ${e.toString()}");
+      return WiFiConnectCode.missingPlugin;
     }
-    return bResult ?? false;
   }
 
   /// Register a network with the system in the device's wireless networks.
@@ -484,9 +491,8 @@ class WiFiForIoTPlugin {
     if (!await isEnabled()) {
       await setEnabled(true);
     }
-    bool? bResult;
     try {
-      bResult = await _channel.invokeMethod('findAndConnect', {
+      final Object? raw = await _channel.invokeMethod('findAndConnect', {
         "ssid": ssid.toString(),
         "bssid": bssid?.toString(),
         "password": password?.toString(),
@@ -494,10 +500,13 @@ class WiFiForIoTPlugin {
         "with_internet": withInternet,
         "timeout_in_seconds": timeoutInSeconds,
       });
+      if (raw is String) {
+        return WiFiConnectCode.isOk(raw);
+      }
     } on MissingPluginException catch (e) {
       print("MissingPluginException : ${e.toString()}");
     }
-    return bResult ?? false;
+    return false;
   }
 
   /// Returns whether the device is connected to a Wi-Fi network.
