@@ -42,7 +42,9 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -1287,6 +1289,13 @@ public class WifiIotPlugin
     return WifiConnectCodes.NETWORK_SUGGESTION_FAILED;
   }
 
+  private Map<String, Object> buildConnectResult(String code, long networkHandle) {
+    Map<String, Object> result = new HashMap<>();
+    result.put("code", code);
+    result.put("networkHandle", networkHandle);
+    return result;
+  }
+
   /// Method to connect to WIFI Network
   private void connectTo(
       final Result poResult,
@@ -1306,7 +1315,7 @@ public class WifiIotPlugin
           new Runnable() {
             @Override
             public void run() {
-              poResult.success(connectResult);
+              poResult.success(buildConnectResult(connectResult, 0L));
             }
           });
     } else {
@@ -1316,7 +1325,7 @@ public class WifiIotPlugin
             new Runnable() {
               @Override
               public void run() {
-                poResult.success(WifiConnectCodes.WEP_NOT_SUPPORTED);
+                poResult.success(buildConnectResult(WifiConnectCodes.WEP_NOT_SUPPORTED, 0L));
               }
             });
         return;
@@ -1335,7 +1344,7 @@ public class WifiIotPlugin
                 new Runnable() {
                   @Override
                   public void run() {
-                    poResult.success(WifiConnectCodes.INVALID_BSSID);
+                    poResult.success(buildConnectResult(WifiConnectCodes.INVALID_BSSID, 0L));
                   }
                 });
             return;
@@ -1372,7 +1381,7 @@ public class WifiIotPlugin
             new Runnable() {
               @Override
               public void run() {
-                poResult.success(suggestionCode);
+                poResult.success(buildConnectResult(suggestionCode, 0L));
               }
             });
       } else {
@@ -1388,7 +1397,7 @@ public class WifiIotPlugin
                 new Runnable() {
                   @Override
                   public void run() {
-                    poResult.success(WifiConnectCodes.INVALID_BSSID);
+                    poResult.success(buildConnectResult(WifiConnectCodes.INVALID_BSSID, 0L));
                   }
                 });
             return;
@@ -1424,7 +1433,7 @@ public class WifiIotPlugin
                 super.onAvailable(network);
                 if (!resultSent) {
                   joinedNetwork = network;
-                  poResult.success(WifiConnectCodes.OK);
+                  poResult.success(buildConnectResult(WifiConnectCodes.OK, network.getNetworkHandle()));
                   resultSent = true;
                 }
               }
@@ -1436,7 +1445,7 @@ public class WifiIotPlugin
                   connectivityManager.unregisterNetworkCallback(this);
                 }
                 if (!resultSent) {
-                  poResult.success(WifiConnectCodes.CONNECTION_UNAVAILABLE);
+                  poResult.success(buildConnectResult(WifiConnectCodes.CONNECTION_UNAVAILABLE, 0L));
                   resultSent = true;
                 }
               }

@@ -325,9 +325,11 @@ class WiFiForIoTPlugin {
   ///
   /// @param [isHidden] Whether the SSID is hidden (not broadcasted by the AP).
   ///
-  /// Returns `WiFiConnectCode.ok` (empty string) if the connection succeeded.
-  /// Otherwise a stable error code string; see `WiFiConnectCode`.
-  static Future<String> connect(
+  /// Returns a map with:
+  /// - `code`: `WiFiConnectCode.ok` (empty string) if the connection succeeded,
+  ///   otherwise a stable error code string; see `WiFiConnectCode`.
+  /// - `networkHandle`: Android network handle (long), `0` on iOS or when unavailable.
+  static Future<Map<String, dynamic>> connect(
     String ssid, {
     String? bssid,
     String? password,
@@ -346,7 +348,7 @@ class WiFiForIoTPlugin {
     // TODO: support any binary sequence as required instead of just strings.
     if (ssid.length == 0 || ssid.length > 32) {
       print("Invalid SSID");
-      return WiFiConnectCode.invalidSsid;
+      return {'code': WiFiConnectCode.invalidSsid, 'networkHandle': 0};
     }
 
     if (!Platform.isIOS && !await isEnabled()) await setEnabled(true);
@@ -361,13 +363,19 @@ class WiFiForIoTPlugin {
         "timeout_in_seconds": timeoutInSeconds,
         "security": serializeNetworkSecurityMap[security],
       });
-      if (raw is String) {
-        return raw;
+      if (raw is Map) {
+        return {
+          'code': raw['code'] as String? ?? WiFiConnectCode.unknown,
+          'networkHandle': raw['networkHandle'] as int? ?? 0,
+        };
       }
-      return WiFiConnectCode.unknown;
+      if (raw is String) {
+        return {'code': raw, 'networkHandle': 0};
+      }
+      return {'code': WiFiConnectCode.unknown, 'networkHandle': 0};
     } on MissingPluginException catch (e) {
       print("MissingPluginException : ${e.toString()}");
-      return WiFiConnectCode.missingPlugin;
+      return {'code': WiFiConnectCode.missingPlugin, 'networkHandle': 0};
     }
   }
 
@@ -500,6 +508,9 @@ class WiFiForIoTPlugin {
         "with_internet": withInternet,
         "timeout_in_seconds": timeoutInSeconds,
       });
+      if (raw is Map) {
+        return WiFiConnectCode.isOk(raw['code'] as String? ?? '');
+      }
       if (raw is String) {
         return WiFiConnectCode.isOk(raw);
       }

@@ -132,7 +132,7 @@ public class SwiftWifiIotPlugin: NSObject, FlutterPlugin {
             NEHotspotConfigurationManager.shared.apply(configuration) { [weak self] (error) in
                 guard let this = self else {
                     print("[wifi_iot] connect failed: plugin deallocated — \(WifiConnectCodes.pluginInternal)")
-                    result(WifiConnectCodes.pluginInternal)
+                    result(["code": WifiConnectCodes.pluginInternal, "networkHandle": 0])
                     return
                 }
                 if let error = error {
@@ -141,30 +141,30 @@ public class SwiftWifiIotPlugin: NSObject, FlutterPlugin {
                        let neError = NEHotspotConfigurationError(rawValue: ns.code) {
                         let codeStr = WifiConnectCodes.from(neError: neError)
                         print("[wifi_iot] connect failed: NEHotspotConfigurationError \(neError) (code=\(ns.code)) → \(codeStr) | \(ns.localizedDescription)")
-                        result(codeStr)
+                        result(["code": codeStr, "networkHandle": 0])
                     } else {
                         print("[wifi_iot] connect failed: unexpected NSError domain=\(ns.domain) code=\(ns.code) → \(WifiConnectCodes.unknownError) | \(ns.localizedDescription)")
-                        result(WifiConnectCodes.unknownError)
+                        result(["code": WifiConnectCodes.unknownError, "networkHandle": 0])
                     }
                     return
                 }
                 this.getSSID { (connectedSSID) -> () in
                     if let connectedSSID = connectedSSID {
                         if sSSID == connectedSSID {
-                            result(WifiConnectCodes.ok)
+                            result(["code": WifiConnectCodes.ok, "networkHandle": 0])
                         } else {
                             print("[wifi_iot] connect failed: SSID mismatch expected='\(sSSID)' current='\(connectedSSID)' → \(WifiConnectCodes.postApplySsidMismatch)")
-                            result(WifiConnectCodes.postApplySsidMismatch)
+                            result(["code": WifiConnectCodes.postApplySsidMismatch, "networkHandle": 0])
                         }
                     } else {
                         print("[wifi_iot] connect failed: current SSID unavailable after apply → \(WifiConnectCodes.postApplySsidUnavailable)")
-                        result(WifiConnectCodes.postApplySsidUnavailable)
+                        result(["code": WifiConnectCodes.postApplySsidUnavailable, "networkHandle": 0])
                     }
                 }
             }
         } else {
             print("[wifi_iot] connect failed: iOS < 11 — \(WifiConnectCodes.iosVersionUnsupported)")
-            result(WifiConnectCodes.iosVersionUnsupported)
+            result(["code": WifiConnectCodes.iosVersionUnsupported, "networkHandle": 0])
         }
     }
 
