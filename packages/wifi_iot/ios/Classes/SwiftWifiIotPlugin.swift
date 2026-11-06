@@ -148,23 +148,68 @@ public class SwiftWifiIotPlugin: NSObject, FlutterPlugin {
                     }
                     return
                 }
-                this.getSSID { (connectedSSID) -> () in
-                    if let connectedSSID = connectedSSID {
-                        if sSSID == connectedSSID {
-                            result(["code": WifiConnectCodes.ok, "networkHandle": 0])
-                        } else {
-                            print("[wifi_iot] connect failed: SSID mismatch expected='\(sSSID)' current='\(connectedSSID)' → \(WifiConnectCodes.postApplySsidMismatch)")
-                            result(["code": WifiConnectCodes.postApplySsidMismatch, "networkHandle": 0])
-                        }
-                    } else {
-                        print("[wifi_iot] connect failed: current SSID unavailable after apply → \(WifiConnectCodes.postApplySsidUnavailable)")
-                        result(["code": WifiConnectCodes.postApplySsidUnavailable, "networkHandle": 0])
-                    }
-                }
+                this.confirmSSIDAfterApply(ssid: sSSID, result: result)
             }
         } else {
             print("[wifi_iot] connect failed: iOS < 11 — \(WifiConnectCodes.iosVersionUnsupported)")
             result(["code": WifiConnectCodes.iosVersionUnsupported, "networkHandle": 0])
+        }
+    }
+
+    private func confirmSSIDAfterApply(ssid: String, result: @escaping FlutterResult) {
+        let deadline = DispatchTime.now() + .seconds(3)
+
+        DispatchQueue.main.async {
+            var finished = false
+            var lastSSID: String?
+
+            func finish(code: String) {
+                guard !finished else { return }
+                finished = true
+                result(["code": code, "networkHandle": 0])
+            }
+
+            func finishTimeout() {
+                guard !finished else { return }
+                if let lastSSID = lastSSID {
+                    print("[wifi_iot] connect failed: SSID mismatch after 3s expected='\(ssid)' current='\(lastSSID)' → \(WifiConnectCodes.postApplySsidMismatch)")
+                    finish(code: WifiConnectCodes.postApplySsidMismatch)
+                } else {
+                    print("[wifi_iot] connect failed: current SSID unavailable after 3s → \(WifiConnectCodes.postApplySsidUnavailable)")
+                    finish(code: WifiConnectCodes.postApplySsidUnavailable)
+                }
+            }
+
+            func poll() {
+                guard !finished else { return }
+                guard DispatchTime.now() < deadline else {
+                    finishTimeout()
+                    return
+                }
+                self.getSSID { connectedSSID in
+                    DispatchQueue.main.async {
+                        guard !finished else { return }
+                        guard DispatchTime.now() < deadline else {
+                            finishTimeout()
+                            return
+                        }
+                        lastSSID = connectedSSID
+                        if connectedSSID == ssid {
+                            finish(code: WifiConnectCodes.ok)
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(100)) {
+                                poll()
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Keep the timeout independent of SSID queries that may complete late.
+            DispatchQueue.main.asyncAfter(deadline: deadline) {
+                finishTimeout()
+            }
+            poll()
         }
     }
 
